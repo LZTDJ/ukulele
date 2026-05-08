@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>尤克里里四线谱 + 歌词行 | 导出完全显示 | 文字对齐每拍</title>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #ede8db;
+            font-family: 'Segoe UI', 'Roboto', 'Noto Sans', system-ui, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #2c3e2f;
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 2rem;
+            box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .toolbar {
+            background: #2d5a2c;
+            color: white;
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            border-bottom: 4px solid #f7b32b;
+        }
+
+        .logo h1 {
+            font-size: 1.4rem;
+            margin: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        button {
+            background: #f5f1e6;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #2d5a2c;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        button:hover {
+            background: #ffe6b3;
+            transform: translateY(-2px);
+        }
+
+        .danger-btn {
+            background: #fff0f0;
+            color: #b13e3e;
+        }
+
+        .score-container {
+            background: #fffef7;
+            padding: 20px;
+            overflow-x: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+            align-items: center;
+        }
+
+        /* 每一行的整体卡片 */
+        .system-row {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            display: inline-block;
+            padding: 12px 20px;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+        }
+
+        /* 文字行容器 - 修复导出裁剪问题 */
+        .lyrics-row {
+            display: flex;
+            justify-content: flex-start;
+            margin-top: 8px;
+            margin-left: 60px;  /* LEFT_MARGIN 值，与canvas弦名区对齐 */
+            width: calc(100% - 60px);
+            min-height: 40px;    /* 确保导出时有足够高度 */
+        }
+
+        .lyrics-cell {
+            flex: 0 0 auto;
+            text-align: center;
+            font-size: 14px;
+            font-family: 'Segoe UI', 'Noto Sans', sans-serif;
+            padding: 0;
+            height: 36px;          /* 固定高度，防止裁剪 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lyrics-cell input {
+            width: 100%;
+            border: none;
+            border-bottom: 1px dashed #c0b69a;
+            background: transparent;
+            text-align: center;
+            font-size: 14px;
+            padding: 8px 0;
+            outline: none;
+            color: #2c3e2f;
+            font-weight: 500;
+            line-height: 1.4;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        .lyrics-cell input:focus {
+            border-bottom-color: #f7b32b;
+            background: #fff6e5;
+        }
+
+        .info-bar {
+            background: #f6f2e6;
+            padding: 6px 20px;
+            font-size: 0.7rem;
+            color: #836e44;
+            border-top: 1px solid #e9e2cf;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+
+        footer {
+            font-size: 0.7rem;
+            text-align: center;
+            padding: 10px;
+            color: #897b56;
+            background: #fef9ef;
+        }
+
+        .selected-hint {
+            background: #f7e9c3;
+            border-radius: 20px;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+        }
+
+        /* 导出临时修复：强制所有内容可见 */
+        .export-fix {
+            overflow: visible !important;
+        }
+        .export-fix .lyrics-row {
+            overflow: visible !important;
+        }
+        .export-fix .lyrics-cell {
+            overflow: visible !important;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="toolbar">
+        <div class="logo">
+            <h1>🎸 尤克里里 · 四线谱 + 歌词行</h1>
+        </div>
+        <div class="button-group">
+            <button id="addOneMeasureBtn">➕ 添加1小节</button>
+            <button id="addEightMeasuresBtn">➕➕ 添加8小节</button>
+            <button id="delOneMeasureBtn" class="danger-btn">➖ 删除1小节</button>
+            <button id="clearAllBtn" class="danger-btn">🧹 全部清空</button>
+            <button id="exampleBtn">✨ 示例旋律+歌词</button>
+            <button id="exportJpgBtn">📸 导出 JPG 图片</button>
+            <label for="importJsonInput" style="background:#f5f1e6; padding:6px 14px; border-radius:40px; font-size:0.8rem; font-weight:600; cursor:pointer;">📂 导入乐谱
+                <input type="file" id="importJsonInput" accept=".json" style="display:none;" />
+            </label>
+        </div>
+    </div>
+    <div class="info-bar">
+        <span>🎼 四线谱 (自上而下: 第1弦 A — 第2弦 E — 第3弦 C — 第4弦 G)</span>
+        <span class="selected-hint">💡 双击音符编辑品位 | 下方文字框输入歌词/和弦标记，与每一拍对齐 | 导出图片文字完整显示</span>
+    </div>
+
+    <div id="scoreContainer" class="score-container"></div>
+
+    <footer>✨ 每行固定 8 个小节 | 文字框与上方乐谱严格对齐 | 导出高清 JPG 含所有文字</footer>
+</div>
+
+<script>
+    // ---------- 配置 ----------
+    const STRING_COUNT = 4;
+    const BEATS_PER_MEASURE = 4;
+    const MEASURES_PER_ROW = 8;      // 每行8小节
+    const MEASURE_WIDTH = 100;        // 小节宽度(px)
+    const BEAT_WIDTH = MEASURE_WIDTH / BEATS_PER_MEASURE; // 25px
+    const STAFF_TOP = 45;             // 顶部留白
+    const LINE_SPACING = 24;          // 四条线间距
+    const LEFT_MARGIN = 60;           // 左侧弦名区域宽度
+    const ROW_HEIGHT = STAFF_TOP + LINE_SPACING * 3 + 30; // 画布高度
+
+    const STRING_NAMES = ["A (1弦)", "E (2弦)", "C (3弦)", "G (4弦)"];
+
+    // ---------- 全局数据 ----------
+    let totalMeasures = 8;               // 初始8个小节
+    let gridData = [];                  // 品位数据 [4][totalBeats]
+    let lyricsData = [];                // 每拍文字 (长度 totalBeats)
+    let totalBeats = totalMeasures * BEATS_PER_MEASURE;
+
+    const scoreContainer = document.getElementById("scoreContainer");
+
+    // ---------- 初始化数据 ----------
+    function initData(beats) {
+        const newGrid = [];
+        for (let i = 0; i < STRING_COUNT; i++) {
+            newGrid.push(Array(beats).fill(""));
+        }
+        const newLyrics = Array(beats).fill("");
+        return { grid: newGrid, lyrics: newLyrics };
+    }
+
+    // 调整总小节数
+    function resizeMeasures(newMeasures) {
+        if (newMeasures === totalMeasures) return;
+        if (newMeasures < 1) newMeasures = 1;
+        const newBeats = newMeasures * BEATS_PER_MEASURE;
+        
+        // 调整 gridData
+        for (let r = 0; r < STRING_COUNT; r++) {
+            const currentRow = gridData[r];
+            if (newBeats > totalBeats) {
+                for (let i = totalBeats; i < newBeats; i++) currentRow.push("");
+            } else {
+                gridData[r] = currentRow.slice(0, newBeats);
+            }
+        }
+        // 调整 lyricsData
+        if (newBeats > totalBeats) {
+            for (let i = totalBeats; i < newBeats; i++) lyricsData.push("");
+        } else {
+            lyricsData = lyricsData.slice(0, newBeats);
+        }
+        
+        totalBeats = newBeats;
+        totalMeasures = newMeasures;
+        renderAllRows();
+    }
+
+    function addOneMeasure() { resizeMeasures(totalMeasures + 1); }
+    function addEightMeasures() { resizeMeasures(totalMeasures + 8); }
+    function deleteOneMeasure() {
+        if (totalMeasures <= 1) { alert("至少保留1个小节"); return; }
+        resizeMeasures(totalMeasures - 1);
+    }
+    function clearAll() {
+        for (let r = 0; r < STRING_COUNT; r++) {
+            for (let c = 0; c < totalBeats; c++) gridData[r][c] = "";
+        }
+        for (let i = 0; i < totalBeats; i++) lyricsData[i] = "";
+        renderAllRows();
+    }
+
+    // 示例旋律 + 歌词
+    function loadExample() {
+        if (totalMeasures !== 8) resizeMeasures(8);
+        clearAll();
+        // 旋律
+        const melody = [3,3,10,10, 12,12,10,0, 8,8,7,7, 5,5,3,0, 3,3,10,10, 12,12,10,0, 8,8,7,7, 5,5,3,0];
+        for (let i = 0; i < Math.min(melody.length, totalBeats); i++) {
+            if (melody[i] !== undefined) gridData[0][i] = melody[i].toString();
+        }
+        for (let i = 0; i < totalBeats; i+=4) {
+            if (i+2 < totalBeats) gridData[3][i] = "2";
+        }
+        // 示例歌词 (每个字对齐一拍)
+        const sampleLyrics = "小 星 星 亮 晶 晶 啊  ~ 一 闪 一 闪 放 光 明 ~ 我 们 一 起 唱 这 首 歌 谣 快 乐 无 比 ~";
+        const chars = sampleLyrics.split('');
+        for (let i = 0; i < totalBeats && i < chars.length; i++) {
+            lyricsData[i] = chars[i];
+        }
+        renderAllRows();
+    }
+
+    // ---------- 渲染所有行 (四线谱 + 下方文字行) ----------
+    function renderAllRows() {
+        if (!scoreContainer) return;
+        scoreContainer.innerHTML = "";
+        const rowsCount = Math.ceil(totalMeasures / MEASURES_PER_ROW);
+        for (let rowIdx = 0; rowIdx < rowsCount; rowIdx++) {
+            const startMeasure = rowIdx * MEASURES_PER_ROW;
+            const endMeasure = Math.min(startMeasure + MEASURES_PER_ROW, totalMeasures);
+            const measuresInThisRow = endMeasure - startMeasure;
+            if (measuresInThisRow === 0) continue;
+            
+            const beatsInThisRow = measuresInThisRow * BEATS_PER_MEASURE;
+            const startBeat = startMeasure * BEATS_PER_MEASURE;
+            
+            const systemDiv = document.createElement("div");
+            systemDiv.className = "system-row";
+            
+            // 画布
+            const canvas = document.createElement("canvas");
+            const canvasWidth = LEFT_MARGIN + measuresInThisRow * MEASURE_WIDTH + 20;
+            const canvasHeight = ROW_HEIGHT;
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            canvas.style.width = `${canvasWidth}px`;
+            canvas.style.height = `${canvasHeight}px`;
+            canvas.setAttribute("data-start-measure", startMeasure);
+            
+            drawSystem(canvas, startMeasure, measuresInThisRow);
+            
+            // 文字行
+            const lyricsRowDiv = document.createElement("div");
+            lyricsRowDiv.className = "lyrics-row";
+            lyricsRowDiv.style.width = `${canvasWidth - LEFT_MARGIN}px`;
+            lyricsRowDiv.style.marginLeft = `${LEFT_MARGIN}px`;
+            
+            for (let beatLocal = 0; beatLocal < beatsInThisRow; beatLocal++) {
+                const globalBeat = startBeat + beatLocal;
+                const cell = document.createElement("div");
+                cell.className = "lyrics-cell";
+                cell.style.width = `${BEAT_WIDTH}px`;
+                const input = document.createElement("input");
+                input.type = "text";
+                input.maxLength = 6;
+                input.value = lyricsData[globalBeat] || "";
+                input.placeholder = "·";
+                input.addEventListener("input", (function(beatIdx) {
+                    return function(e) {
+                        lyricsData[beatIdx] = e.target.value;
+                    };
+                })(globalBeat));
+                cell.appendChild(input);
+                lyricsRowDiv.appendChild(cell);
+            }
+            
+            systemDiv.appendChild(canvas);
+            systemDiv.appendChild(lyricsRowDiv);
+            scoreContainer.appendChild(systemDiv);
+            
+            // 绑定双击编辑品位
+            canvas.addEventListener("dblclick", (function(canvasElem, startMeas, measCount) {
+                return function(e) {
+                    handleCanvasDoubleClick(e, canvasElem, startMeas, measCount);
+                };
+            })(canvas, startMeasure, measuresInThisRow));
+        }
+    }
+
+    // 绘制一行四线谱
+    function drawSystem(canvas, startMeasure, measureCount) {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const startBeat = startMeasure * BEATS_PER_MEASURE;
+        const totalBeatsInRow = measureCount * BEATS_PER_MEASURE;
+        
+        ctx.save();
+        // 四根线 (浅灰)
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = "#c5c2b5";
+        for (let i = 0; i < STRING_COUNT; i++) {
+            const y = STAFF_TOP + i * LINE_SPACING;
+            ctx.beginPath();
+            ctx.moveTo(LEFT_MARGIN - 5, y);
+            ctx.lineTo(canvas.width - 15, y);
+            ctx.stroke();
+            ctx.fillStyle = "#2d5a2c";
+            ctx.font = "bold 12px 'Segoe UI'";
+            ctx.textAlign = "right";
+            ctx.fillText(STRING_NAMES[i], LEFT_MARGIN - 8, y + 3);
+        }
+        
+        // 小节竖线
+        ctx.lineWidth = 1;
+        for (let m = 0; m <= measureCount; m++) {
+            const x = LEFT_MARGIN + m * MEASURE_WIDTH;
+            ctx.beginPath();
+            ctx.moveTo(x, STAFF_TOP - 8);
+            ctx.lineTo(x, STAFF_TOP + LINE_SPACING * 3);
+            if (m % measureCount === 0 || m === measureCount) {
+                ctx.lineWidth = 2.0;
+                ctx.strokeStyle = "#b0aa93";
+            } else {
+                ctx.lineWidth = 0.7;
+                ctx.strokeStyle = "#ddd6c0";
+            }
+            ctx.stroke();
+        }
+        // 拍分割线 (轻虚线)
+        for (let m = 0; m < measureCount; m++) {
+            for (let b = 1; b < BEATS_PER_MEASURE; b++) {
+                const x = LEFT_MARGIN + m * MEASURE_WIDTH + b * BEAT_WIDTH;
+                ctx.beginPath();
+                ctx.moveTo(x, STAFF_TOP - 4);
+                ctx.lineTo(x, STAFF_TOP + LINE_SPACING * 3);
+                ctx.lineWidth = 0.5;
+                ctx.strokeStyle = "#e0d8c2";
+                ctx.stroke();
+            }
+        }
+        
+        // 数字 (纯黑)
+        ctx.font = "bold 16px 'Courier New', monospace";
+        ctx.fillStyle = "#1a1a1a";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (let beatLocal = 0; beatLocal < totalBeatsInRow; beatLocal++) {
+            const globalBeat = startBeat + beatLocal;
+            if (globalBeat >= totalBeats) break;
+            const measureLocal = Math.floor(beatLocal / BEATS_PER_MEASURE);
+            const beatInMeasure = beatLocal % BEATS_PER_MEASURE;
+            const x = LEFT_MARGIN + measureLocal * MEASURE_WIDTH + beatInMeasure * BEAT_WIDTH + BEAT_WIDTH/2;
+            for (let s = 0; s < STRING_COUNT; s++) {
+                const y = STAFF_TOP + s * LINE_SPACING;
+                const val = gridData[s][globalBeat];
+                if (val && val !== "") {
+                    ctx.fillText(val, x, y);
+                }
+            }
+        }
+        
+        // 小节序号
+        ctx.font = "11px 'Segoe UI'";
+        ctx.fillStyle = "#a88347";
+        for (let m = 0; m < measureCount; m++) {
+            const x = LEFT_MARGIN + m * MEASURE_WIDTH + 5;
+            const measureNumber = startMeasure + m + 1;
+            ctx.fillText(`${measureNumber}`, x, STAFF_TOP - 12);
+        }
+        ctx.restore();
+    }
+    
+    // 双击编辑品位
+    function handleCanvasDoubleClick(e, canvas, startMeasure, measureCount) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const mouseX = (e.clientX - rect.left) * scaleX;
+        const mouseY = (e.clientY - rect.top) * scaleY;
+        if (mouseX < LEFT_MARGIN) return;
+        const relativeX = mouseX - LEFT_MARGIN;
+        const measureIndex = Math.floor(relativeX / MEASURE_WIDTH);
+        if (measureIndex < 0 || measureIndex >= measureCount) return;
+        const beatInMeasure = Math.floor((relativeX % MEASURE_WIDTH) / BEAT_WIDTH);
+        if (beatInMeasure < 0 || beatInMeasure >= BEATS_PER_MEASURE) return;
+        const globalBeat = (startMeasure + measureIndex) * BEATS_PER_MEASURE + beatInMeasure;
+        if (globalBeat >= totalBeats) return;
+        let stringIdx = -1;
+        for (let i = 0; i < STRING_COUNT; i++) {
+            const yCenter = STAFF_TOP + i * LINE_SPACING;
+            if (Math.abs(mouseY - yCenter) < 15) { stringIdx = i; break; }
+        }
+        if (stringIdx === -1) return;
+        const currentVal = gridData[stringIdx][globalBeat];
+        let newVal = prompt(`编辑第${globalBeat+1}拍 (${STRING_NAMES[stringIdx]}) 的数字 (0-24, x/-)`, currentVal);
+        if (newVal !== null) {
+            newVal = newVal.trim();
+            if (newVal === "") gridData[stringIdx][globalBeat] = "";
+            else gridData[stringIdx][globalBeat] = newVal.slice(0,3);
+            renderAllRows();
+        }
+    }
+
+    // 导出 JPG (修复文字显示一半的问题)
+    async function exportAsJPG() {
+        const container = document.getElementById("scoreContainer");
+        if (!container) return;
+        
+        // 临时添加修复类，确保所有文字区域完整显示
+        container.classList.add("export-fix");
+        // 额外确保每个 lyrics-cell 和 input 没有溢出裁剪
+        const allCells = document.querySelectorAll(".lyrics-cell");
+        const originalOverflow = [];
+        allCells.forEach((cell, idx) => {
+            originalOverflow[idx] = cell.style.overflow;
+            cell.style.overflow = "visible";
+        });
+        
+        const originalPadding = container.style.padding;
+        container.style.padding = "12px";
+        
+        // 短暂延迟确保样式应用
+        await new Promise(r => setTimeout(r, 50));
+        
+        try {
+            const canvas = await html2canvas(container, {
+                scale: 2,
+                backgroundColor: "#ffffff",
+                logging: false,
+                useCORS: false,
+                allowTaint: false,
+                windowWidth: container.scrollWidth,
+                windowHeight: container.scrollHeight
+            });
+            const link = document.createElement("a");
+            link.download = `ukulele_score_${new Date().toISOString().slice(0,19)}.jpg`;
+            link.href = canvas.toDataURL("image/jpeg", 0.95);
+            link.click();
+        } catch (err) {
+            console.error(err);
+            alert("导出失败，可刷新后重试");
+        } finally {
+            // 恢复样式
+            container.classList.remove("export-fix");
+            allCells.forEach((cell, idx) => {
+                cell.style.overflow = originalOverflow[idx] || "";
+            });
+            container.style.padding = originalPadding;
+        }
+    }
+    
+    // 导出 JSON (包含歌词)
+    function exportToJSON() {
+        const exportData = {
+            totalMeasures: totalMeasures,
+            beatsPerMeasure: BEATS_PER_MEASURE,
+            tabData: gridData,
+            lyricsData: lyricsData,
+            version: "UkuleleTabWithLyrics"
+        };
+        const jsonStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonStr], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `ukulele_tab.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+    
+    function importJSON(file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+                if (data.tabData && Array.isArray(data.tabData) && data.tabData.length === STRING_COUNT) {
+                    let newMeasures = data.totalMeasures || 8;
+                    if (newMeasures < 1) newMeasures = 1;
+                    const newBeats = newMeasures * BEATS_PER_MEASURE;
+                    const newGrid = [];
+                    for (let r = 0; r < STRING_COUNT; r++) {
+                        let rowData = data.tabData[r] || [];
+                        if (rowData.length < newBeats) while(rowData.length < newBeats) rowData.push("");
+                        else if (rowData.length > newBeats) rowData = rowData.slice(0, newBeats);
+                        newGrid.push(rowData.map(v => (v === undefined || v === null) ? "" : String(v)));
+                    }
+                    let newLyrics = (data.lyricsData && Array.isArray(data.lyricsData)) ? [...data.lyricsData] : [];
+                    if (newLyrics.length < newBeats) while(newLyrics.length < newBeats) newLyrics.push("");
+                    else if (newLyrics.length > newBeats) newLyrics = newLyrics.slice(0, newBeats);
+                    
+                    gridData = newGrid;
+                    lyricsData = newLyrics;
+                    totalBeats = newBeats;
+                    totalMeasures = newMeasures;
+                    renderAllRows();
+                    alert("乐谱导入成功！");
+                } else {
+                    alert("无效的乐谱文件");
+                }
+            } catch(e) { alert("解析失败: " + e.message); }
+        };
+        reader.readAsText(file);
+    }
+    
+    // UI 按钮绑定
+    function bindUI() {
+        document.getElementById("addOneMeasureBtn").onclick = () => addOneMeasure();
+        document.getElementById("addEightMeasuresBtn").onclick = () => addEightMeasures();
+        document.getElementById("delOneMeasureBtn").onclick = () => deleteOneMeasure();
+        document.getElementById("clearAllBtn").onclick = () => clearAll();
+        document.getElementById("exampleBtn").onclick = () => loadExample();
+        document.getElementById("exportJpgBtn").onclick = () => exportAsJPG();
+        const importInput = document.getElementById("importJsonInput");
+        importInput.onchange = (e) => {
+            if (e.target.files && e.target.files[0]) importJSON(e.target.files[0]);
+            importInput.value = "";
+        };
+        const exportJsonBtn = document.createElement("button");
+        exportJsonBtn.textContent = "💾 导出JSON";
+        exportJsonBtn.onclick = () => exportToJSON();
+        document.querySelector(".button-group").appendChild(exportJsonBtn);
+    }
+    
+    // 初始化
+    function init() {
+        const { grid, lyrics } = initData(totalBeats);
+        gridData = grid;
+        lyricsData = lyrics;
+        renderAllRows();
+        bindUI();
+    }
+    init();
+</script>
+</body>
+</html>S
